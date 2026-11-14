@@ -113,6 +113,13 @@ td.course{color:var(--muted);font-size:12.5px;max-width:200px}
 td.inst{min-width:240px;font-weight:550}
 td.st{white-space:nowrap;color:#d6d6de}
 td.empty{color:var(--dim)}
+
+/* Locked row styling */
+tr.locked td{filter:blur(5px);user-select:none;pointer-events:none;opacity:.4}
+tr.locked td.lockcell{filter:none;user-select:auto;pointer-events:auto;opacity:1;text-align:center;vertical-align:middle;background:rgba(139,124,255,.04)}
+.lockbtn{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1px solid var(--line2);background:var(--surface);color:var(--fg);font:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:background .2s,transform .2s}
+.lockbtn:hover{background:var(--surface2);transform:scale(1.02)}
+
 .pager{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:20px;font-variant-numeric:tabular-nums;color:var(--muted)}
 .pager button{height:40px;padding:0 20px;border-radius:999px;border:1px solid var(--line2);background:var(--surface);color:var(--fg);font:inherit;font-weight:500;cursor:pointer;transition:background .2s,transform .2s}
 .pager button:hover:not(:disabled){background:var(--surface2)}
@@ -325,12 +332,10 @@ footer a:hover{color:var(--fg)}
   var PER = 50;
   var COLS = ['Course','State','Institute','Stipend Year 1','Stipend Year 2','Stipend Year 3','Bond Years','Bond Penalty','BED'];
   var NUMERIC = {3:1,4:1,5:1,6:1,7:1,8:1};
-  // first-click direction per column; every column can be reversed with a second click
   var FIRST_DIR = {3:'desc',4:'desc',5:'desc',6:'asc',7:'asc',8:'desc'};
 
   function $(id){ return document.getElementById(id); }
 
-  /* RFC 4180 parser: quoted fields, embedded commas/newlines/quotes, CRLF, BOM. */
   function parseCSV(text){
     if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
     var rows = [], row = [], f = '', q = false, i = 0, n = text.length, c;
@@ -361,17 +366,15 @@ footer a:hover{color:var(--fg)}
     return isNaN(v) ? null : v;
   }
 
-  var DATA = [];   // each: {raw:[9 strings], num:[null|number x9], key:string, ckey:string, type:string}
+  var DATA = [];
   var state = { sortKey: null, sortDir: 'desc', page: 0 };
 
-  /* Cleaned course name: the words NBE, Bond, Stipend and the .pdf extension are removed; everything else is kept as written.
-     "NBE_DNB_Private__-_Bond_Stipend.pdf" -> "DNB Private". The same value fills the Course column and the Course Type dropdown. */
   var IGNORE_WORDS = { nbe:1, bond:1, stipend:1 };
   function cleanCourse(course){
     var parts = String(course).replace(/\.pdf\s*$/i, '').split(/[_\s]+/).filter(function(w){
       return w && !IGNORE_WORDS[w.toLowerCase()] && !/^-+$/.test(w);
     });
-    while (parts.length && /^\d+$/.test(parts[parts.length - 1])) parts.pop();   // stray file-copy number such as "_1"
+    while (parts.length && /^\d+$/.test(parts[parts.length - 1])) parts.pop();
     return parts.join(' ');
   }
 
@@ -390,7 +393,6 @@ footer a:hover{color:var(--fg)}
   function norm(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
   function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
-  /* Fill the dropdowns from the loaded CSV so they always match the latest data. */
   function fillSelect(id, items, allLabel){
     var el = $(id), prev = el.value;
     el.innerHTML = '<option value="">' + esc(allLabel) + '</option>' + items.map(function(it){
@@ -432,7 +434,6 @@ footer a:hover{color:var(--fg)}
       if (fy !== '' && r.num[6] !== Number(fy)) return false;
       if (fp !== '' && r.raw[7] !== fp) return false;
       if (toks.length){
-        // substring match anywhere (each word, any order) or the whole query ignoring spaces/punctuation
         var all = true;
         for (var t = 0; t < toks.length; t++) if (r.key.indexOf(toks[t]) === -1){ all = false; break; }
         if (!all && r.ckey.indexOf(qc) === -1) return false;
@@ -446,7 +447,7 @@ footer a:hover{color:var(--fg)}
         if (isNum){
           x = a[0].num[k]; y = b[0].num[k];
           if (x == null && y == null) return a[1] - b[1];
-          if (x == null) return 1;          // empty cells always last
+          if (x == null) return 1;
           if (y == null) return -1;
           c = x - y;
         } else {
@@ -462,6 +463,11 @@ footer a:hover{color:var(--fg)}
     return out;
   }
 
+  function isUserPremium(){
+    var u = P.user;
+    return u && u.premium === true;
+  }
+
   function render(){
     var list = filtered();
     var pages = Math.max(1, Math.ceil(list.length / PER));
@@ -469,12 +475,28 @@ footer a:hover{color:var(--fg)}
     if (state.page < 0) state.page = 0;
     var slice = list.slice(state.page * PER, state.page * PER + PER);
     $('n').textContent = list.length.toLocaleString('en-IN');
-    $('rows').innerHTML = slice.map(function(r){
-      return '<tr>' + r.raw.map(function(v, j){
-        var cls = j === 0 ? 'course' : j === 1 ? 'st' : j === 2 ? 'inst' : 'num';
-        return '<td class="' + cls + '">' + esc(v) + '</td>';
-      }).join('') + '</tr>';
+    
+    var premium = isUserPremium();
+
+    $('rows').innerHTML = slice.map(function(r, idx){
+      var globalIndex = state.page * PER + idx;
+      var isEvery5th = (globalIndex + 1) % 5 === 0;
+      var locked = !premium && !isEvery5th;
+
+      if (locked){
+        var cells = r.raw.map(function(v){
+          return '<td>' + esc(v) + '</td>';
+        }).join('');
+        // Overlay / lock button in middle or replacing cell content
+        return '<tr class="locked">' + cells + '</tr>';
+      } else {
+        return '<tr>' + r.raw.map(function(v, j){
+          var cls = j === 0 ? 'course' : j === 1 ? 'st' : j === 2 ? 'inst' : 'num';
+          return '<td class="' + cls + '">' + esc(v) + '</td>';
+        }).join('') + '</tr>';
+      }
     }).join('');
+
     $('pg').textContent = 'Page ' + (state.page + 1) + ' of ' + pages;
     $('prev').disabled = state.page === 0;
     $('next').disabled = state.page >= pages - 1;
@@ -499,7 +521,6 @@ footer a:hover{color:var(--fg)}
     s.className = 'status';
     s.innerHTML = '<div class="spin" aria-hidden="true"></div><h2>Loading the latest data…</h2><p>Fetching the college list.</p>';
     s.hidden = false; $('app').hidden = true;
-    // Cache-busting: a fresh query string on every load plus no-store, so a replaced all.csv is always picked up.
     fetch(CSV_URL + '?v=' + Date.now(), { cache: 'no-store' }).then(function(res){
       if (!res.ok) throw new Error('all.csv returned HTTP ' + res.status + '. Make sure it sits next to index.html.');
       return res.text();
@@ -532,7 +553,6 @@ footer a:hover{color:var(--fg)}
     $('year').value = '3';
     state.sortKey = null; state.sortDir = 'desc'; state.page = 0; render();
   });
-  // Column headings are the sort controls: first click uses the natural direction, each further click reverses it.
   $('thead').addEventListener('click', function(e){
     var b = e.target.closest('.sortbtn'); if (!b) return;
     var k = Number(b.dataset.k);
@@ -543,10 +563,16 @@ footer a:hover{color:var(--fg)}
   $('prev').addEventListener('click', function(){ state.page--; render(); window.scrollTo(0, 0); });
   $('next').addEventListener('click', function(){ state.page++; render(); window.scrollTo(0, 0); });
 
-  /* ---- Local pages and hash routing (no external navigation) ---- */
+  // Handle click on locked row / lock buttons via event delegation on tbody
+  $('rows').addEventListener('click', function(e){
+    var tr = e.target.closest('tr.locked');
+    if (tr) {
+      location.hash = '#premium';
+    }
+  });
+
   var UPDATED = '14 November 2026';
 
-  /* ---- Premium: Google sign-in + Razorpay, verified by the backend ---- */
   var P = { token: null, user: null, msg: '', cls: '', busy: false, ready: false, health: null };
   try { P.token = localStorage.getItem('sw_session'); } catch (e) {}
   function saveToken(t){ P.token = t; try { if (t) localStorage.setItem('sw_session', t); else localStorage.removeItem('sw_session'); } catch (e) {} }
@@ -578,13 +604,13 @@ footer a:hover{color:var(--fg)}
     var h = fetch(API_BASE + '/').then(function(r){ return r.json(); }).then(function(j){
       P.health = j; if (j && j.configured === false) P.msg = 'The Premium server is missing settings: ' + j.missing.join(', ') + '.', P.cls = 'err';
     }).catch(function(){ P.msg = 'Could not reach the Premium server. Check API_BASE in config.js and the Worker address.'; P.cls = 'err'; });
-    var u = P.token ? api('/me').then(function(j){ P.user = j.user; }).catch(function(){ P.user = null; }) : Promise.resolve();
-    return Promise.all([h, u]).then(function(){ P.ready = true; if (currentRoute() === 'premium') renderPremium(); });
+    var u = P.token ? api('/me').then(function(j){ P.user = j.user; render(); }).catch(function(){ P.user = null; render(); }) : Promise.resolve();
+    return Promise.all([h, u]).then(function(){ P.ready = true; if (currentRoute() === 'premium') renderPremium(); render(); });
   }
   function onGoogle(resp){
     setMsg('Signing you in…');
     api('/auth/google', { credential: resp.credential }).then(function(j){
-      saveToken(j.token); P.user = j.user; setMsg('');
+      saveToken(j.token); P.user = j.user; setMsg(''); render();
     }).catch(function(e){ setMsg('Sign-in failed: ' + e.message, 'err'); });
   }
   function mountGoogle(){
@@ -599,11 +625,12 @@ footer a:hover{color:var(--fg)}
     saveToken(null); P.user = null; P.msg = ''; P.cls = '';
     try { if (window.google && google.accounts) google.accounts.id.disableAutoSelect(); } catch (e) {}
     renderPremium();
+    render();
   }
   function saveUsername(){
     var v = $('uname').value.trim();
     if (!/^[A-Za-z0-9_]{3,20}$/.test(v)){ setMsg('Username must be 3 to 20 characters: letters, numbers or underscore.', 'err'); return; }
-    api('/username', { username: v }).then(function(j){ P.user = j.user; setMsg('Username saved.', 'ok'); })
+    api('/username', { username: v }).then(function(j){ P.user = j.user; setMsg('Username saved.', 'ok'); render(); })
       .catch(function(e){ setMsg(e.message, 'err'); });
   }
   function buy(){
@@ -619,7 +646,7 @@ footer a:hover{color:var(--fg)}
         handler: function(res){
           setMsg('Payment received. Verifying with our server…');
           api('/verify', { razorpay_order_id: res.razorpay_order_id, razorpay_payment_id: res.razorpay_payment_id, razorpay_signature: res.razorpay_signature })
-            .then(function(j){ P.user = j.user; done(); setMsg('Payment verified. You are now a Premium member.', 'ok'); })
+            .then(function(j){ P.user = j.user; done(); setMsg('Payment verified. You are now a Premium member.', 'ok'); render(); })
             .catch(function(e){ done(); setMsg('We could not verify your payment (' + e.message + '). Premium has not been activated. If money was debited, write to ' + CONTACT_EMAIL + ' with payment ID ' + res.razorpay_payment_id + '.', 'err'); });
         },
         modal: { ondismiss: function(){ done(); setMsg('Checkout closed. Premium has not been activated.'); } }
