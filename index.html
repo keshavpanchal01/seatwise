@@ -113,25 +113,14 @@ td.course{color:var(--muted);font-size:12.5px;max-width:200px}
 td.inst{min-width:240px;font-weight:550}
 td.st{white-space:nowrap;color:#d6d6de}
 td.empty{color:var(--dim)}
-
-/* Locked row styling */
 tr.locked{cursor:pointer;position:relative}
 tr.locked td{filter:blur(5px);user-select:none;opacity:.45;transition:opacity .2s}
 tr.locked:hover td{opacity:.65;background:rgba(139,124,255,.07)}
 tr.locked td.inst{filter:none;opacity:1;position:relative}
 tr.locked td.inst .blur-txt{filter:blur(5px);user-select:none;opacity:.45;display:inline-block}
 tr.locked:hover td.inst .blur-txt{opacity:.65}
-.lockbadge{
-  position:absolute;left:16px;top:50%;transform:translateY(-50%);
-  display:inline-flex;align-items:center;gap:6px;
-  padding:5px 12px;border-radius:999px;
-  background:var(--surface2);border:1px solid var(--line2);
-  color:var(--fg);font-size:12px;font-weight:600;
-  box-shadow:0 4px 16px rgba(0,0,0,.45);
-  z-index:2;white-space:nowrap;
-}
+.lockbadge{position:absolute;left:16px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;background:var(--surface2);border:1px solid var(--line2);color:var(--fg);font-size:12px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.45);z-index:2;white-space:nowrap}
 tr.locked:hover .lockbadge{border-color:var(--accent);background:rgba(139,124,255,.22)}
-
 .pager{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:20px;font-variant-numeric:tabular-nums;color:var(--muted)}
 .pager button{height:40px;padding:0 20px;border-radius:999px;border:1px solid var(--line2);background:var(--surface);color:var(--fg);font:inherit;font-weight:500;cursor:pointer;transition:background .2s,transform .2s}
 .pager button:hover:not(:disabled){background:var(--surface2)}
@@ -344,10 +333,12 @@ footer a:hover{color:var(--fg)}
   var PER = 50;
   var COLS = ['Course','State','Institute','Stipend Year 1','Stipend Year 2','Stipend Year 3','Bond Years','Bond Penalty','BED'];
   var NUMERIC = {3:1,4:1,5:1,6:1,7:1,8:1};
+  // first-click direction per column; every column can be reversed with a second click
   var FIRST_DIR = {3:'desc',4:'desc',5:'desc',6:'asc',7:'asc',8:'desc'};
 
   function $(id){ return document.getElementById(id); }
 
+  /* RFC 4180 parser: quoted fields, embedded commas/newlines/quotes, CRLF, BOM. */
   function parseCSV(text){
     if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
     var rows = [], row = [], f = '', q = false, i = 0, n = text.length, c;
@@ -378,9 +369,11 @@ footer a:hover{color:var(--fg)}
     return isNaN(v) ? null : v;
   }
 
-  var DATA = [];
+  var DATA = [];   // each: {raw:[9 strings], num:[null|number x9], key:string, ckey:string, type:string}
   var state = { sortKey: null, sortDir: 'desc', page: 0 };
 
+  /* Cleaned course name: the words NBE, Bond, Stipend and the .pdf extension are removed; everything else is kept as written.
+     "NBE_DNB_Private__-_Bond_Stipend.pdf" -> "DNB Private". The same value fills the Course column and the Course Type dropdown. */
   var IGNORE_WORDS = { nbe:1, bond:1, stipend:1 };
   function cleanCourse(course){
     var parts = String(course).replace(/\.pdf\s*$/i, '').split(/[_\s]+/).filter(function(w){
@@ -388,7 +381,7 @@ footer a:hover{color:var(--fg)}
     }).map(function(w){
       return /^di+ploma$/i.test(w) ? 'Diploma' : w;
     });
-    while (parts.length && /^\d+$/.test(parts[parts.length - 1])) parts.pop();
+    while (parts.length && /^\d+$/.test(parts[parts.length - 1])) parts.pop();   // stray file-copy number such as "_1"
     return parts.join(' ');
   }
 
@@ -407,6 +400,7 @@ footer a:hover{color:var(--fg)}
   function norm(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
   function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
+  /* Fill the dropdowns from the loaded CSV so they always match the latest data. */
   function fillSelect(id, items, allLabel){
     var el = $(id), prev = el.value;
     el.innerHTML = '<option value="">' + esc(allLabel) + '</option>' + items.map(function(it){
@@ -448,6 +442,7 @@ footer a:hover{color:var(--fg)}
       if (fy !== '' && r.num[6] !== Number(fy)) return false;
       if (fp !== '' && r.raw[7] !== fp) return false;
       if (toks.length){
+        // substring match anywhere (each word, any order) or the whole query ignoring spaces/punctuation
         var all = true;
         for (var t = 0; t < toks.length; t++) if (r.key.indexOf(toks[t]) === -1){ all = false; break; }
         if (!all && r.ckey.indexOf(qc) === -1) return false;
@@ -461,7 +456,7 @@ footer a:hover{color:var(--fg)}
         if (isNum){
           x = a[0].num[k]; y = b[0].num[k];
           if (x == null && y == null) return a[1] - b[1];
-          if (x == null) return 1;
+          if (x == null) return 1;          // empty cells always last
           if (y == null) return -1;
           c = x - y;
         } else {
@@ -525,6 +520,7 @@ footer a:hover{color:var(--fg)}
     s.className = 'status';
     s.innerHTML = '<div class="spin" aria-hidden="true"></div><h2>Loading the latest data…</h2><p>Fetching the college list.</p>';
     s.hidden = false; $('app').hidden = true;
+    // Cache-busting: a fresh query string on every load plus no-store, so a replaced all.csv is always picked up.
     fetch(CSV_URL + '?v=' + Date.now(), { cache: 'no-store' }).then(function(res){
       if (!res.ok) throw new Error('all.csv returned HTTP ' + res.status + '. Make sure it sits next to index.html.');
       return res.text();
@@ -557,6 +553,7 @@ footer a:hover{color:var(--fg)}
     $('year').value = '3';
     state.sortKey = null; state.sortDir = 'desc'; state.page = 0; render();
   });
+  // Column headings are the sort controls: first click uses the natural direction, each further click reverses it.
   $('thead').addEventListener('click', function(e){
     var b = e.target.closest('.sortbtn'); if (!b) return;
     var k = Number(b.dataset.k);
@@ -566,7 +563,6 @@ footer a:hover{color:var(--fg)}
   });
   $('prev').addEventListener('click', function(){ state.page--; render(); window.scrollTo(0, 0); });
   $('next').addEventListener('click', function(){ state.page++; render(); window.scrollTo(0, 0); });
-
   $('rows').addEventListener('click', function(e){
     if (e.target.closest('tr.locked')) location.hash = '#premium';
   });
@@ -577,20 +573,45 @@ footer a:hover{color:var(--fg)}
     }
   });
 
+  /* ---- Local pages and hash routing (no external navigation) ---- */
   var UPDATED = '14 November 2026';
 
+  /* ---- Premium: Google sign-in + Razorpay, verified by the backend (with direct Google Sign-In fallback when API_BASE is unset) ---- */
   var P = { token: null, user: null, msg: '', cls: '', busy: false, ready: false, health: null };
   try { P.token = localStorage.getItem('sw_session'); } catch (e) {}
   function saveToken(t){ P.token = t; try { if (t) localStorage.setItem('sw_session', t); else localStorage.removeItem('sw_session'); } catch (e) {} }
+  function loadLocalUser(){
+    try { var raw = localStorage.getItem('sw_local_user'); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  }
+  function saveLocalUser(u){
+    try {
+      if (u) {
+        localStorage.setItem('sw_local_user', JSON.stringify(u));
+        if (u.sub && u.username) localStorage.setItem('sw_uname_' + u.sub, u.username);
+      } else {
+        localStorage.removeItem('sw_local_user');
+      }
+    } catch (e) {}
+  }
+  function decodeJwt(token){
+    try {
+      var b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      var json = decodeURIComponent(atob(b64).split('').map(function(c){
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(json);
+    } catch (e) { return null; }
+  }
   function loadScript(src){
     return new Promise(function(resolve, reject){
+      if (document.querySelector('script[src="' + src + '"]')) { resolve(); return; }
       var s = document.createElement('script'); s.src = src; s.async = true;
       s.onload = resolve; s.onerror = function(){ reject(new Error('Could not load ' + src.split('/')[2] + '. Check your connection or ad-blocker.')); };
       document.head.appendChild(s);
     });
   }
   function api(path, body){
-    if (!API_BASE) return Promise.reject(new Error('The Premium service is not connected yet.'));
+    if (!API_BASE) return Promise.reject(new Error('The Premium payment backend is not connected yet. Set API_BASE in config.js after deploying the Cloudflare Worker.'));
     var opts = { method: body === undefined ? 'GET' : 'POST', headers: {} };
     if (P.token) opts.headers['Authorization'] = 'Bearer ' + P.token;
     if (body !== undefined){ opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
@@ -606,21 +627,38 @@ footer a:hover{color:var(--fg)}
   }
   function setMsg(m, cls){ P.msg = m || ''; P.cls = cls || ''; if (currentRoute() === 'premium') renderPremium(); }
   function refreshUser(){
-    if (!API_BASE){ P.ready = true; return Promise.resolve(); }
+    if (!API_BASE){
+      P.user = loadLocalUser();
+      P.ready = true;
+      if (currentRoute() === 'premium') renderPremium();
+      if (DATA.length) render();
+      return Promise.resolve();
+    }
     var h = fetch(API_BASE + '/').then(function(r){ return r.json(); }).then(function(j){
       P.health = j; if (j && j.configured === false) P.msg = 'The Premium server is missing settings: ' + j.missing.join(', ') + '.', P.cls = 'err';
     }).catch(function(){ P.msg = 'Could not reach the Premium server. Check API_BASE in config.js and the Worker address.'; P.cls = 'err'; });
-    var u = P.token ? api('/me').then(function(j){ P.user = j.user; render(); }).catch(function(){ P.user = null; render(); }) : Promise.resolve();
-    return Promise.all([h, u]).then(function(){ P.ready = true; if (currentRoute() === 'premium') renderPremium(); render(); });
+    var u = P.token ? api('/me').then(function(j){ P.user = j.user; }).catch(function(){ P.user = null; }) : Promise.resolve();
+    return Promise.all([h, u]).then(function(){ P.ready = true; if (currentRoute() === 'premium') renderPremium(); if (DATA.length) render(); });
   }
   function onGoogle(resp){
+    if (!API_BASE){
+      var payload = decodeJwt(resp && resp.credential);
+      if (!payload || !payload.email){ setMsg('Sign-in failed: Invalid Google credential.', 'err'); return; }
+      var savedName = '';
+      try { savedName = localStorage.getItem('sw_uname_' + payload.sub) || ''; } catch (e) {}
+      P.user = { sub: payload.sub, email: payload.email, name: payload.name || '', username: savedName, premium: false };
+      saveLocalUser(P.user);
+      setMsg('Signed in with Google.', 'ok');
+      if (DATA.length) render();
+      return;
+    }
     setMsg('Signing you in…');
     api('/auth/google', { credential: resp.credential }).then(function(j){
-      saveToken(j.token); P.user = j.user; setMsg(''); render();
+      saveToken(j.token); P.user = j.user; setMsg(''); if (DATA.length) render();
     }).catch(function(e){ setMsg('Sign-in failed: ' + e.message, 'err'); });
   }
   function mountGoogle(){
-    if (!$('gbtn') || !API_BASE) return;
+    if (!$('gbtn')) return;
     loadScript('https://accounts.google.com/gsi/client').then(function(){
       if (!window.google || !google.accounts || !$('gbtn')) return;
       google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogle });
@@ -628,19 +666,31 @@ footer a:hover{color:var(--fg)}
     }).catch(function(e){ setMsg(e.message, 'err'); });
   }
   function signOut(){
-    saveToken(null); P.user = null; P.msg = ''; P.cls = '';
+    saveToken(null); saveLocalUser(null); P.user = null; P.msg = ''; P.cls = '';
     try { if (window.google && google.accounts) google.accounts.id.disableAutoSelect(); } catch (e) {}
     renderPremium();
-    render();
+    if (DATA.length) render();
   }
   function saveUsername(){
     var v = $('uname').value.trim();
     if (!/^[A-Za-z0-9_]{3,20}$/.test(v)){ setMsg('Username must be 3 to 20 characters: letters, numbers or underscore.', 'err'); return; }
-    api('/username', { username: v }).then(function(j){ P.user = j.user; setMsg('Username saved.', 'ok'); render(); })
+    if (!API_BASE){
+      if (!P.user) return;
+      P.user.username = v;
+      saveLocalUser(P.user);
+      setMsg('Username saved.', 'ok');
+      return;
+    }
+    api('/username', { username: v }).then(function(j){ P.user = j.user; setMsg('Username saved.', 'ok'); if (DATA.length) render(); })
       .catch(function(e){ setMsg(e.message, 'err'); });
   }
   function buy(){
-    if (P.busy) return; P.busy = true; setMsg('Opening secure checkout…');
+    if (P.busy) return;
+    if (!API_BASE){
+      setMsg('Payment checkout requires the Cloudflare Worker backend (set API_BASE in config.js per DEPLOYMENT.md).', 'err');
+      return;
+    }
+    P.busy = true; setMsg('Opening secure checkout…');
     var done = function(){ P.busy = false; };
     Promise.all([api('/order', {}), loadScript('https://checkout.razorpay.com/v1/checkout.js')]).then(function(r){
       var o = r[0];
@@ -652,7 +702,7 @@ footer a:hover{color:var(--fg)}
         handler: function(res){
           setMsg('Payment received. Verifying with our server…');
           api('/verify', { razorpay_order_id: res.razorpay_order_id, razorpay_payment_id: res.razorpay_payment_id, razorpay_signature: res.razorpay_signature })
-            .then(function(j){ P.user = j.user; done(); setMsg('Payment verified. You are now a Premium member.', 'ok'); render(); })
+            .then(function(j){ P.user = j.user; done(); setMsg('Payment verified. You are now a Premium member.', 'ok'); if (DATA.length) render(); })
             .catch(function(e){ done(); setMsg('We could not verify your payment (' + e.message + '). Premium has not been activated. If money was debited, write to ' + CONTACT_EMAIL + ' with payment ID ' + res.razorpay_payment_id + '.', 'err'); });
         },
         modal: { ondismiss: function(){ done(); setMsg('Checkout closed. Premium has not been activated.'); } }
@@ -667,19 +717,14 @@ footer a:hover{color:var(--fg)}
   function renderPremium(){
     var el = $('page'); if (!el || currentRoute() !== 'premium') return;
     var plan = '<div class="plan"><div class="tag">Membership</div><div class="price">₹10</div><p class="once">One-time payment</p><ul>' +
-      '<li>Unlock all institute rows without restrictions</li>' +
-      '<li>Linked to your Google account</li>' +
-      '<li>Restored automatically when you sign in again</li>' +
-      '<li>Payment confirmed securely on our server</li></ul></div>';
+      '<li>Unlock all institute rows without restrictions</li><li>Linked to your Google account</li><li>Restored automatically when you sign in again</li><li>Payment confirmed securely on our server</li></ul></div>';
     var act, u = P.user;
-    if (!API_BASE){
-      act = '<h2>Premium is not available yet</h2><div class="note">The Premium service has not been connected. Set <code>API_BASE</code> in config.js after deploying the backend.</div>';
-    } else if (!P.ready){
+    if (!P.ready){
       act = '<p>Loading…</p>';
     } else if (!u){
-      act = '<h2>Step 1: Sign in with Google</h2><p>Sign in with Google, choose a username and unlock your verified badge to view all institute records.</p><div id="gbtn" style="min-height:44px"></div>';
+      act = '<h2>Step 1: Sign in with Google</h2><p>Sign in with Google, choose a username and unlock your verified badge.</p><div id="gbtn" style="min-height:44px"></div>';
     } else if (!u.username){
-      act = '<h2>Step 2: Choose your username</h2><p>Signed in as ' + esc(u.email) + '. Pick a username to continue toward your verified badge.</p>' +
+      act = '<h2>Step 2: Choose your username</h2><p>Signed in as ' + esc(u.email) + '.</p>' +
         '<div class="field"><label for="uname">Username</label><input id="uname" type="search" autocomplete="off" maxlength="20" placeholder="3 to 20 letters, numbers or _"></div>' +
         '<div class="row"><button class="btn" type="button" id="usave">Save username</button><button class="btn sec" type="button" id="sout">Sign out</button></div>';
     } else {
@@ -691,7 +736,7 @@ footer a:hover{color:var(--fg)}
     }
     el.innerHTML = '<span class="eyebrow"><i></i>Membership</span><h1>Premium</h1><p class="sub">Sign in with Google, choose a username and unlock your verified badge.</p>' +
       '<div class="pcard">' + plan + '<div class="pact">' + act + '<div class="msg ' + P.cls + '" role="status" aria-live="polite">' + esc(P.msg) + '</div></div></div>';
-    if (API_BASE && P.ready && !u) mountGoogle();
+    if (P.ready && !u) mountGoogle();
     if ($('sout')) $('sout').addEventListener('click', signOut);
     if ($('usave')) { $('usave').addEventListener('click', saveUsername); $('uname').addEventListener('keydown', function(e){ if (e.key === 'Enter') saveUsername(); }); }
     if ($('buy')) $('buy').addEventListener('click', buy);
