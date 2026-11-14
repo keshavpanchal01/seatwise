@@ -58,12 +58,8 @@ Changes can take a few minutes to start working.
 
 ## Step 3 – Website (GitHub Pages)
 
-1. Open `index.html` in Notepad, find the line
-   `var API_BASE = '';`
-   and put your Worker address between the quotes, e.g.
-   `var API_BASE = 'https://seatwise-api.yourname.workers.dev';`
-   Save. (Or send me the address and I will do it for you.)
-2. On GitHub, create a repository (or use your existing one) and upload **`index.html`** and **`all.csv`** to the top level (not inside a folder). The `worker`, `tests` and `.md` files are optional for the website; keeping them there is harmless (they contain no secrets).
+1. Open `config.js` in Notepad, find the line `API_BASE: '',` and put your Worker address between the quotes, e.g. `API_BASE: 'https://seatwise-api.yourname.workers.dev',`. Save. This is the only file you edit for Premium. (Or send me the address and I will do it.)
+2. On GitHub, create a repository (or use your existing one) and upload **`index.html`**, **`config.js`** and **`all.csv`** to the top level (not inside a folder). The `worker`, `tests` and `.md` files are optional for the website; keeping them there is harmless (they contain no secrets).
 3. Repository → Settings → Pages → Source: "Deploy from a branch" → Branch `main`, folder `/ (root)` → Save.
 4. After a minute or two your site is live at `https://USERNAME.github.io/REPOSITORY/`.
 
@@ -78,17 +74,21 @@ GitHub Pages republishes in roughly 1–2 minutes; after that every visitor gets
 
 | Name | Where to set it | Secret? | Value |
 |---|---|---|---|
-| `GOOGLE_CLIENT_ID` | `worker/wrangler.toml` (already filled) and `index.html` (already filled) | No (public) | your `...apps.googleusercontent.com` ID |
+| `GOOGLE_CLIENT_ID` | `worker/wrangler.toml` (already filled) and `config.js` (already filled) | No (public) | your `...apps.googleusercontent.com` ID |
 | `RAZORPAY_KEY_ID` | `worker/wrangler.toml` | No (public) | `rzp_live_...` |
 | `ALLOWED_ORIGIN` | `worker/wrangler.toml` | No | `https://USERNAME.github.io` |
 | KV namespace `SEATWISE` | `worker/wrangler.toml` | No | id from Step 1.5 |
 | `RAZORPAY_KEY_SECRET` | `npx wrangler secret put` | **Yes** | Razorpay Key Secret |
 | `SESSION_SECRET` | `npx wrangler secret put` | **Yes** | long random text |
 | `RAZORPAY_WEBHOOK_SECRET` | `npx wrangler secret put` (optional) | **Yes** | same text as in Razorpay webhook |
-| `API_BASE` | `index.html` | No | your Worker address |
+| `API_BASE` | `config.js` | No | your Worker address |
 
 Never put a secret in `index.html`, `wrangler.toml` or GitHub.
 
 ## First live test
 
 Razorpay live payments need your Razorpay account to be fully activated (KYC done). Sign in, choose a username, click **Buy Premium – ₹10**, pay ₹10, and the ✓ should appear next to your username. Sign out and sign in again with the same Google account; the ✓ returns. If you need your ₹10 back, refund it from the Razorpay dashboard.
+
+## Troubleshooting
+
+Open your Worker address in a browser: it shows `configured: true`, or lists the settings still missing (names only). The Premium page also shows these messages. `ALLOWED_ORIGIN` must exactly match your site origin (several can be comma-separated).

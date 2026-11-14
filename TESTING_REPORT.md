@@ -1,6 +1,6 @@
 # Seatwise – Testing Report
 
-Run on 14 Nov 2026 against your real `all.csv` (2,658 rows). Backend tests: `node tests/worker.test.mjs` (38 checks). Browser tests in real Chrome: `node tests/browser.test.mjs` (71 checks). **All 109 passed, no console errors.**
+Updated after the redesign. Browser suite: 104 checks passed; backend suite: 38 passed. Premium payment/Google were simulated only (not tested live). Run on 14 Nov 2026 against your real `all.csv` (2,658 rows). Backend tests: `node tests/worker.test.mjs` (38 checks). Browser tests in real Chrome: `node tests/browser.test.mjs` (71 checks). **All 109 passed, no console errors.**
 
 ## Files
 
