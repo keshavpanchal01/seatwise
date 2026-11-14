@@ -115,10 +115,22 @@ td.st{white-space:nowrap;color:#d6d6de}
 td.empty{color:var(--dim)}
 
 /* Locked row styling */
-tr.locked td{filter:blur(5px);user-select:none;pointer-events:none;opacity:.4}
-tr.locked td.lockcell{filter:none;user-select:auto;pointer-events:auto;opacity:1;text-align:center;vertical-align:middle;background:rgba(139,124,255,.04)}
-.lockbtn{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1px solid var(--line2);background:var(--surface);color:var(--fg);font:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:background .2s,transform .2s}
-.lockbtn:hover{background:var(--surface2);transform:scale(1.02)}
+tr.locked{cursor:pointer;position:relative}
+tr.locked td{filter:blur(5px);user-select:none;opacity:.45;transition:opacity .2s}
+tr.locked:hover td{opacity:.65;background:rgba(139,124,255,.07)}
+tr.locked td.inst{filter:none;opacity:1;position:relative}
+tr.locked td.inst .blur-txt{filter:blur(5px);user-select:none;opacity:.45;display:inline-block}
+tr.locked:hover td.inst .blur-txt{opacity:.65}
+.lockbadge{
+  position:absolute;left:16px;top:50%;transform:translateY(-50%);
+  display:inline-flex;align-items:center;gap:6px;
+  padding:5px 12px;border-radius:999px;
+  background:var(--surface2);border:1px solid var(--line2);
+  color:var(--fg);font-size:12px;font-weight:600;
+  box-shadow:0 4px 16px rgba(0,0,0,.45);
+  z-index:2;white-space:nowrap;
+}
+tr.locked:hover .lockbadge{border-color:var(--accent);background:rgba(139,124,255,.22)}
 
 .pager{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:20px;font-variant-numeric:tabular-nums;color:var(--muted)}
 .pager button{height:40px;padding:0 20px;border-radius:999px;border:1px solid var(--line2);background:var(--surface);color:var(--fg);font:inherit;font-weight:500;cursor:pointer;transition:background .2s,transform .2s}
@@ -373,6 +385,8 @@ footer a:hover{color:var(--fg)}
   function cleanCourse(course){
     var parts = String(course).replace(/\.pdf\s*$/i, '').split(/[_\s]+/).filter(function(w){
       return w && !IGNORE_WORDS[w.toLowerCase()] && !/^-+$/.test(w);
+    }).map(function(w){
+      return /^di+ploma$/i.test(w) ? 'Diploma' : w;
     });
     while (parts.length && /^\d+$/.test(parts[parts.length - 1])) parts.pop();
     return parts.join(' ');
@@ -464,8 +478,7 @@ footer a:hover{color:var(--fg)}
   }
 
   function isUserPremium(){
-    var u = P.user;
-    return u && u.premium === true;
+    return !!(P.user && P.user.premium);
   }
 
   function render(){
@@ -474,29 +487,20 @@ footer a:hover{color:var(--fg)}
     if (state.page >= pages) state.page = pages - 1;
     if (state.page < 0) state.page = 0;
     var slice = list.slice(state.page * PER, state.page * PER + PER);
-    $('n').textContent = list.length.toLocaleString('en-IN');
-    
     var premium = isUserPremium();
-
+    $('n').textContent = list.length.toLocaleString('en-IN');
     $('rows').innerHTML = slice.map(function(r, idx){
       var globalIndex = state.page * PER + idx;
-      var isEvery5th = (globalIndex + 1) % 5 === 0;
-      var locked = !premium && !isEvery5th;
-
-      if (locked){
-        var cells = r.raw.map(function(v){
-          return '<td>' + esc(v) + '</td>';
-        }).join('');
-        // Overlay / lock button in middle or replacing cell content
-        return '<tr class="locked">' + cells + '</tr>';
-      } else {
-        return '<tr>' + r.raw.map(function(v, j){
-          var cls = j === 0 ? 'course' : j === 1 ? 'st' : j === 2 ? 'inst' : 'num';
-          return '<td class="' + cls + '">' + esc(v) + '</td>';
-        }).join('') + '</tr>';
-      }
+      var locked = !premium && ((globalIndex + 1) % 5 !== 0);
+      var cells = r.raw.map(function(v, j){
+        var cls = j === 0 ? 'course' : j === 1 ? 'st' : j === 2 ? 'inst' : 'num';
+        if (locked && j === 2){
+          return '<td class="' + cls + '"><span class="blur-txt">' + esc(v) + '</span><span class="lockbadge" aria-label="Locked — Upgrade to Premium"><span aria-hidden="true">🔒</span> Unlock</span></td>';
+        }
+        return '<td class="' + cls + '">' + esc(v) + '</td>';
+      }).join('');
+      return '<tr' + (locked ? ' class="locked" role="button" tabindex="0" title="Click to unlock with Premium"' : '') + '>' + cells + '</tr>';
     }).join('');
-
     $('pg').textContent = 'Page ' + (state.page + 1) + ' of ' + pages;
     $('prev').disabled = state.page === 0;
     $('next').disabled = state.page >= pages - 1;
@@ -563,10 +567,12 @@ footer a:hover{color:var(--fg)}
   $('prev').addEventListener('click', function(){ state.page--; render(); window.scrollTo(0, 0); });
   $('next').addEventListener('click', function(){ state.page++; render(); window.scrollTo(0, 0); });
 
-  // Handle click on locked row / lock buttons via event delegation on tbody
   $('rows').addEventListener('click', function(e){
-    var tr = e.target.closest('tr.locked');
-    if (tr) {
+    if (e.target.closest('tr.locked')) location.hash = '#premium';
+  });
+  $('rows').addEventListener('keydown', function(e){
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('tr.locked')){
+      e.preventDefault();
       location.hash = '#premium';
     }
   });
@@ -661,26 +667,29 @@ footer a:hover{color:var(--fg)}
   function renderPremium(){
     var el = $('page'); if (!el || currentRoute() !== 'premium') return;
     var plan = '<div class="plan"><div class="tag">Membership</div><div class="price">₹10</div><p class="once">One-time payment</p><ul>' +
-      '<li>Linked to your Google account</li><li>Restored automatically when you sign in again</li><li>Payment confirmed securely on our server</li></ul></div>';
+      '<li>Unlock all institute rows without restrictions</li>' +
+      '<li>Linked to your Google account</li>' +
+      '<li>Restored automatically when you sign in again</li>' +
+      '<li>Payment confirmed securely on our server</li></ul></div>';
     var act, u = P.user;
     if (!API_BASE){
       act = '<h2>Premium is not available yet</h2><div class="note">The Premium service has not been connected. Set <code>API_BASE</code> in config.js after deploying the backend.</div>';
     } else if (!P.ready){
       act = '<p>Loading…</p>';
     } else if (!u){
-      act = '<h2>Sign in to continue</h2><p>Use your Google account to create your Seatwise Premium profile.</p><div id="gbtn" style="min-height:44px"></div>';
+      act = '<h2>Step 1: Sign in with Google</h2><p>Sign in with Google, choose a username and unlock your verified badge to view all institute records.</p><div id="gbtn" style="min-height:44px"></div>';
     } else if (!u.username){
-      act = '<h2>Choose your username</h2><p>Signed in as ' + esc(u.email) + '.</p>' +
+      act = '<h2>Step 2: Choose your username</h2><p>Signed in as ' + esc(u.email) + '. Pick a username to continue toward your verified badge.</p>' +
         '<div class="field"><label for="uname">Username</label><input id="uname" type="search" autocomplete="off" maxlength="20" placeholder="3 to 20 letters, numbers or _"></div>' +
         '<div class="row"><button class="btn" type="button" id="usave">Save username</button><button class="btn sec" type="button" id="sout">Sign out</button></div>';
     } else {
       act = '<div class="profile"><div class="avatar" aria-hidden="true">' + esc(u.username.charAt(0).toUpperCase()) + '</div><div><div class="who"><span>' + esc(u.username) + '</span>' +
         (u.premium ? '<span class="tick" title="Verified Premium member" aria-label="Verified Premium member">✓</span>' : '') + '</div><div class="email">' + esc(u.email) + '</div></div></div>';
-      if (u.premium) act += '<div class="badge ok">✓ Verified Premium member</div><p>Your membership is linked to your Google account and returns whenever you sign in again.</p>';
-      else act += '<p>Become a Premium member with a one-time payment.</p><div class="row"><button class="btn big" type="button" id="buy">Buy Premium – ₹10</button></div>';
+      if (u.premium) act += '<div class="badge ok">✓ Verified Premium member</div><p>Your membership is linked to your Google account and is restored automatically when you sign in again.</p>';
+      else act += '<h2>Step 3: Unlock your verified badge</h2><p>Complete a one-time ₹10 payment confirmed securely on our server to unlock all rows and your verified badge.</p><div class="row"><button class="btn big" type="button" id="buy">Buy Premium – ₹10</button></div>';
       act += '<div class="row"><button class="btn sec" type="button" id="sout">Sign out</button></div>';
     }
-    el.innerHTML = '<span class="eyebrow"><i></i>Membership</span><h1>Premium</h1><p class="sub">Sign in, pick a username and unlock your verified badge.</p>' +
+    el.innerHTML = '<span class="eyebrow"><i></i>Membership</span><h1>Premium</h1><p class="sub">Sign in with Google, choose a username and unlock your verified badge.</p>' +
       '<div class="pcard">' + plan + '<div class="pact">' + act + '<div class="msg ' + P.cls + '" role="status" aria-live="polite">' + esc(P.msg) + '</div></div></div>';
     if (API_BASE && P.ready && !u) mountGoogle();
     if ($('sout')) $('sout').addEventListener('click', signOut);
