@@ -191,6 +191,16 @@ tr.locked:hover .lockbadge{border-color:var(--accent);background:rgba(139,124,25
 .msg.err{color:var(--bad)}
 .msg.ok{color:var(--good)}
 .pact .field{max-width:380px}
+.page.wide h1{margin-bottom:30px}
+.pcard{margin-top:0}
+.plan{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.plan .tag{padding:6px 14px;border-radius:999px;border:1px solid rgba(45,212,191,.35);background:rgba(45,212,191,.08)}
+.plan .price{background:linear-gradient(180deg,#fff 30%,#a9a9b6);-webkit-background-clip:text;background-clip:text;color:transparent;margin:18px 0 4px}
+.plan .once{margin:0}
+.pact{padding-inline:clamp(28px,5vw,56px);gap:18px}
+.pact .profile{padding-bottom:18px;border-bottom:1px solid var(--line)}
+.pact .msg:empty{display:none}
+#gbtn,#gbtn iframe{color-scheme:light;background:transparent}
 .note{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:14px 16px;font-size:14px;color:var(--muted)}
 code{background:var(--surface2);padding:1px 6px;border-radius:6px;font-size:.92em}
 
@@ -750,7 +760,7 @@ footer a:hover{color:var(--fg)}
       act = '<div class="profile"><div class="avatar" aria-hidden="true">' + esc(u.username.charAt(0).toUpperCase()) + '</div><div><div class="who"><span>' + esc(u.username) + '</span>' +
         (u.premium ? '<span class="tick" title="Verified Premium member" aria-label="Verified Premium member">✓</span>' : '') + '</div><div class="email">' + esc(u.email) + '</div></div></div>';
       if (u.premium) act += '<div class="badge ok">✓ Verified Premium member</div><p>Your membership is linked to your Google account and is restored automatically when you sign in again.</p>';
-      else act += '<div class="row"><button class="btn big" type="button" id="buy">Buy Premium – ₹10</button></div>';
+      else act += '<div class="row"><button class="btn big" type="button" id="buy">Buy Premium ₹10</button></div>';
       act += '<div class="row"><button class="btn sec" type="button" id="sout">Sign out</button></div>';
     }
     el.innerHTML = '<span class="eyebrow"><i></i>Membership</span><h1>Premium</h1>' +
