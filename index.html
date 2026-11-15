@@ -287,7 +287,6 @@ footer a:hover{color:var(--fg)}
 
     <div class="toolbar">
       <div class="count"><span class="n" id="n">0</span> matching records</div>
-      <div class="hint">Click a column heading to sort. Click again to reverse.</div>
     </div>
 
     <div class="tablewrap">
@@ -573,6 +572,27 @@ footer a:hover{color:var(--fg)}
     }
   });
 
+  /* Auto-scroll the table sideways when the mouse is near its left or right edge. */
+  (function(){
+    var wrap = document.querySelector('.tablewrap');
+    var ZONE = 90, MAXSPEED = 14, dir = 0, speed = 0, raf = 0;
+    function step(){
+      if (!dir){ raf = 0; return; }
+      wrap.scrollLeft += dir * speed;
+      raf = requestAnimationFrame(step);
+    }
+    function stop(){ dir = 0; speed = 0; }
+    wrap.addEventListener('mousemove', function(e){
+      var r = wrap.getBoundingClientRect();
+      var x = e.clientX - r.left;
+      if (x < ZONE){ dir = -1; speed = Math.max(1, MAXSPEED * (ZONE - Math.max(x, 0)) / ZONE); }
+      else if (x > r.width - ZONE){ dir = 1; speed = Math.max(1, MAXSPEED * (ZONE - Math.max(r.width - x, 0)) / ZONE); }
+      else { stop(); return; }
+      if (!raf) raf = requestAnimationFrame(step);
+    });
+    wrap.addEventListener('mouseleave', stop);
+  })();
+
   /* ---- Local pages and hash routing (no external navigation) ---- */
   var UPDATED = '14 November 2026';
 
@@ -716,13 +736,12 @@ footer a:hover{color:var(--fg)}
   }
   function renderPremium(){
     var el = $('page'); if (!el || currentRoute() !== 'premium') return;
-    var plan = '<div class="plan"><div class="tag">Membership</div><div class="price">₹10</div><p class="once">One-time payment</p><ul>' +
-      '<li>Unlock all institute rows without restrictions</li><li>Linked to your Google account</li><li>Restored automatically when you sign in again</li><li>Payment confirmed securely on our server</li></ul></div>';
+    var plan = '<div class="plan"><div class="tag">Membership</div><div class="price">₹10</div><p class="once">One-time payment</p></div>';
     var act, u = P.user;
     if (!P.ready){
       act = '<p>Loading…</p>';
     } else if (!u){
-      act = '<h2>Step 1: Sign in with Google</h2><p>Sign in with Google, choose a username and unlock your verified badge.</p><div id="gbtn" style="min-height:44px"></div>';
+      act = '<div id="gbtn" style="min-height:44px"></div>';
     } else if (!u.username){
       act = '<h2>Step 2: Choose your username</h2><p>Signed in as ' + esc(u.email) + '.</p>' +
         '<div class="field"><label for="uname">Username</label><input id="uname" type="search" autocomplete="off" maxlength="20" placeholder="3 to 20 letters, numbers or _"></div>' +
@@ -731,10 +750,10 @@ footer a:hover{color:var(--fg)}
       act = '<div class="profile"><div class="avatar" aria-hidden="true">' + esc(u.username.charAt(0).toUpperCase()) + '</div><div><div class="who"><span>' + esc(u.username) + '</span>' +
         (u.premium ? '<span class="tick" title="Verified Premium member" aria-label="Verified Premium member">✓</span>' : '') + '</div><div class="email">' + esc(u.email) + '</div></div></div>';
       if (u.premium) act += '<div class="badge ok">✓ Verified Premium member</div><p>Your membership is linked to your Google account and is restored automatically when you sign in again.</p>';
-      else act += '<h2>Step 3: Unlock your verified badge</h2><p>Complete a one-time ₹10 payment confirmed securely on our server to unlock all rows and your verified badge.</p><div class="row"><button class="btn big" type="button" id="buy">Buy Premium – ₹10</button></div>';
+      else act += '<div class="row"><button class="btn big" type="button" id="buy">Buy Premium – ₹10</button></div>';
       act += '<div class="row"><button class="btn sec" type="button" id="sout">Sign out</button></div>';
     }
-    el.innerHTML = '<span class="eyebrow"><i></i>Membership</span><h1>Premium</h1><p class="sub">Sign in with Google, choose a username and unlock your verified badge.</p>' +
+    el.innerHTML = '<span class="eyebrow"><i></i>Membership</span><h1>Premium</h1>' +
       '<div class="pcard">' + plan + '<div class="pact">' + act + '<div class="msg ' + P.cls + '" role="status" aria-live="polite">' + esc(P.msg) + '</div></div></div>';
     if (P.ready && !u) mountGoogle();
     if ($('sout')) $('sout').addEventListener('click', signOut);
