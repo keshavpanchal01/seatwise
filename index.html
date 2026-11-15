@@ -711,7 +711,7 @@ footer a:hover{color:var(--fg)}
       setMsg('Username saved.', 'ok');
       return;
     }
-    api('/username', { username: v }).then(function(j){ P.user = j.user; setMsg('Username saved.', 'ok'); if (DATA.length) render(); })
+    api('/username', { username: v }).then(function(j){ P.user = j.user; setMsg('Username saved.', 'ok'); if (DATA.length) render(); if (!P.user.premium) buy(); })
       .catch(function(e){ setMsg(e.message, 'err'); });
   }
   function buy(){

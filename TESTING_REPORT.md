@@ -1,49 +1,16 @@
-# Seatwise – Testing Report
+# Test & security report (payments)
 
-Updated after the redesign. Browser suite: 104 checks passed; backend suite: 38 passed. Premium payment/Google were simulated only (not tested live). Run on 14 Nov 2026 against your real `all.csv` (2,658 rows). Backend tests: `node tests/worker.test.mjs` (38 checks). Browser tests in real Chrome: `node tests/browser.test.mjs` (71 checks). **All 109 passed, no console errors.**
+## Run
+`node --no-warnings tests/backend.test.mjs` → 61 checks. Google, Razorpay and the database are SIMULATED (a real SQL engine is used for the database). **No live payment was made; I cannot access your Razorpay, Google or Cloudflare accounts.** Do the one real ₹10 test in DEPLOYMENT.md Step 7.
 
-## Files
+## Verified by tests
+Google ID token checked on the server (signature, issuer, audience, expiry, verified email); forged/expired/wrong-audience rejected. Signed sessions; tampered or forged sessions rejected. Price fixed at ₹10 INR on the server (browser values ignored). Forged or wrong-secret signatures rejected; failed, wrong-amount and other-order payments rejected; every payment is re-confirmed with Razorpay. Another user cannot claim someone's order. A payment can only unlock the account that owns the order. Retry after failure/cancel reuses the same order (no duplicate order/charge); paid users are never asked again. Webhook: bad/missing signature rejected, replay harmless, unknown order ignored, grants premium if the browser never confirmed. Missed webhook + closed tab is recovered on next load. Duplicate payment is flagged for refund. SQL-injection username rejected (all queries are parameterised). Foreign Origin blocked, oversized/invalid bodies rejected, rate limits work, no secret appears in any response or audit log.
 
-**Modified:** `index.html` (only the parts for requirements 1–8 and 11; header, colours, table, pager, footer and CSV parser are unchanged).
-**Created:** `worker/worker.js`, `worker/wrangler.toml`, `worker/package.json`, `DEPLOYMENT.md`, `TESTING_REPORT.md`, `tests/` (test scripts and screenshots).
-**Copied unchanged:** `all.csv`.
+## Security measures
+Secrets only in Cloudflare Secrets; Key ID is public by design. No cookies (Bearer token), so no CSRF; Origin check as extra. Premium status is read only from the database; localStorage is never trusted. All output is escaped by the existing site code. HTTPS + security headers via `_headers` (no CSP added, to avoid breaking Google/Razorpay scripts).
 
-## The six institute types (read from all.csv)
+## Honest limits
+- Not tested live (see above). - In-code rate limiting is per server instance; add the Cloudflare WAF rule for a strong limit. - Sessions last 14 days and cannot be revoked individually (rotate `SESSION_SECRET` to sign everyone out). - Not a formal third-party penetration test.
 
-| Type (derived from Course) | Records |
-|---|---|
-| Diploma Government | 456 |
-| Diploma Private | 701 |
-| Diploma Public Sector | 12 |
-| DNB Government | 528 |
-| DNB Private | 946 |
-| DNB Public Sector | 15 |
-
-They are computed by code from the Course text after dropping NBE, Bond, Stipend, PDF (and the stray number in `..._Stipend_1.pdf`); the typo "DIiploma" is read as "Diploma". Nothing is hardcoded, so a new type in a future CSV would appear automatically. Each filter count above matched the CSV exactly.
-
-## What was tested and works
-
-- **Filters** individually and combined: type, state, bond years, bond penalty, BED, stipend year + greater-than. Counts matched an independent count of the CSV.
-- **Search:** middle-of-name matches ("hosp", "Ramachandra"), upper/lower case, several words, spaces ignored, works together with other filters.
-- **Sorting:** bond years low→high, click again high→low (toggles); stipend and BED sorts unchanged.
-- **Clear All:** resets search, stipend year/amount, BED, all four dropdowns and sorting.
-- **CSV:** loaded fresh on every visit (cache-busting). A replaced CSV with different values, quotes, commas and ₹ formatting rebuilt all dropdowns and rows with no code change. A missing CSV shows a clear error.
-- **Pages:** nav order Home → Premium → Contact; Contact shows only 🩺 and seatwise01@gmail.com; all four policy pages and the footer links open.
-- **Layout:** desktop and 375px mobile, no sideways page scroll (screenshots in `tests/`).
-- **Backend security (simulated Google and Razorpay):** forged signatures rejected; fake/failed/wrong-amount payments rejected; one account cannot claim another's order; one payment cannot unlock two accounts; the amount is fixed at ₹10 on the server; tampered session tokens rejected; premium survives sign-out and returns on sign-in with the same Google account; webhook signature checked.
-- **Premium page (browser, simulated services):** sign-in, username, cancelled payment, failed payment, backend verification failure (no success is claimed), success with ✓, sign-out, restore on sign-in, reload.
-- **Secrets:** no Razorpay secret, Google secret or Supabase key appears in any project file.
-
-## What I could NOT test (needs your accounts)
-
-- A **real Google sign-in** (needs your site origin added in Google Cloud, Step 2) and a **real ₹10 Razorpay payment** (needs your live account activated). Google and Razorpay were simulated, so please do one real test after deploying, as described at the end of `DEPLOYMENT.md`.
-- Deploying the Worker and GitHub Pages themselves.
-
-## Things you should know
-
-- **Rotate your keys.** The Razorpay Key Secret and the other secrets were pasted into chat. See the top of `DEPLOYMENT.md`.
-- **Policies:** I could not find Zynerd's own policy pages through search, so I wrote them from the usual structure of education-platform policies and Indian law (IT Act 2000, DPDP Act 2023, Consumer Protection Act 2019). They state only what the site actually does. Have them looked over by a lawyer before relying on them. I did not invent a company name, address, registration or court city.
-- **Refund policy** uses the cautious wording I proposed (no refunds for change of mind; refunds for duplicate/failed-activation/error charges). Change it if you want a different practice.
-- **Premium has no stated benefits or expiry** because you did not specify any; the pages say only that membership is linked to the Google account.
-- **Usernames** are unique ignoring case; two people choosing the same name at the exact same instant could in theory collide (very unlikely at this scale).
-- **Search** keeps its existing behaviour of also matching the state and course text, in addition to the institute name.
+## Changed in your site
+`index.html`: one line (after the username is saved, checkout opens automatically). `config.js`: `API_BASE` set to `/api`. Nothing else. New: `functions/`, `lib/`, `schema.sql`, `_headers`, `tests/`.

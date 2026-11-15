@@ -6,7 +6,7 @@ window.SEATWISE_CONFIG = {
 
   // The address of your deployed Cloudflare Worker, e.g. 'https://seatwise-api.yourname.workers.dev'
   // (no slash at the end). Leave empty until the backend is deployed; Premium then shows "not available yet".
-  API_BASE: '',
+  API_BASE: '/api',
 
   // Shown on the Contact page and in policies.
   CONTACT_EMAIL: 'seatwise01@gmail.com'

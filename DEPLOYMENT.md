@@ -1,94 +1,60 @@
-# Seatwise – Deployment Guide (for beginners)
+# Seatwise – Premium payments: setup (Cloudflare Pages)
 
-You will set up three things, in this order:
+Your site stays on Cloudflare Pages. The new files add a small secure server part (`functions/` and `lib/`) that Cloudflare runs for you automatically. Nothing to install, no terminal.
 
-1. **Backend** (a free Cloudflare Worker) – checks Google sign-in, verifies Razorpay payments, remembers who is Premium.
-2. **Google** – tell Google which website may use your sign-in.
-3. **Website** (GitHub Pages) – upload the files.
+**Important:** your Pages project must be connected to your GitHub repository (that is how it already updates when you upload). If you ever used "Direct upload / drag and drop" instead, server files will NOT work; tell me and I will give you the alternative.
 
-Supabase is **not used** anywhere. Ignore any Supabase keys.
+## Step 0 – Razorpay keys (do this first)
+Your Key Secret was pasted in an earlier chat, so treat it as exposed. In Razorpay: Account & Settings → API Keys → **Regenerate Live Key**. Keep the new **Key ID** (starts `rzp_live_`) and new **Key Secret** open in a notepad. Never paste the Key Secret in any chat or on GitHub.
 
----
+## Step 1 – Upload to GitHub
+1. Unzip `seatwise-project.zip` on your computer.
+2. GitHub → your repository → **Add file → Upload files**.
+3. Drag in EVERYTHING inside the unzipped folder, keeping folders: `index.html`, `config.js`, `all.csv`, `schema.sql`, `_headers`, and the folders `functions` and `lib` (and `tests`, optional). Easiest: drag the folders themselves.
+4. Commit changes. Cloudflare will start a build automatically (it may show an error about missing settings until Steps 2–4 are done; that is expected).
 
-## Before you start: rotate the secrets you pasted in chat
+## Step 2 – Create the database (Cloudflare dashboard)
+1. dash.cloudflare.com → **Storage & Databases → D1 SQL Database → Create database**. Name: `seatwise-db`. Create.
+2. Open it → **Console** tab → open the file `schema.sql` from the ZIP in Notepad, copy ALL of it, paste into the console box, click **Execute**. You should see the 4 tables created.
 
-The Google client secret, Supabase secret key and Razorpay **Key Secret** were pasted into a chat, so treat them as exposed.
+## Step 3 – Connect the database to your site
+Workers & Pages → your Pages project (`seatwise-u4d`) → **Settings → Bindings → Add → D1 database**
+- Variable name: `DB` (exactly, capital letters)
+- D1 database: `seatwise-db`
+Save (Production).
 
-- **Razorpay:** Dashboard → Account & Settings → API Keys → Regenerate Live Key. You get a **new Key ID and new Key Secret**. Use the new ones in the steps below (put the new Key ID in `worker/wrangler.toml`, the new Key Secret in Step 1.6). This is the only one that matters for safety.
-- **Google client secret:** this website does not use it at all. You can reset it in Google Cloud Console → APIs & Services → Credentials.
-- **Supabase:** unused. Delete the project or rotate its keys.
+## Step 4 – Paste the settings
+Same project → **Settings → Variables and Secrets → Add** (Production). Add these five:
 
----
+| Name | Type | Value |
+|---|---|---|
+| `GOOGLE_CLIENT_ID` | Text | `437007721003-i8csj3qirbjbgp7d0kjfiso3mevi70q2.apps.googleusercontent.com` |
+| `RAZORPAY_KEY_ID` | Text | your LIVE Key ID `rzp_live_...` |
+| `RAZORPAY_KEY_SECRET` | **Secret** | your LIVE Key Secret |
+| `SESSION_SECRET` | **Secret** | any long random text, 48+ characters (mash the keyboard). Keep it private. |
+| `RAZORPAY_WEBHOOK_SECRET` | **Secret** | any long random text (you will paste the SAME text into Razorpay in Step 5) |
 
-## Step 1 – Backend (Cloudflare Worker)
+Choose type **Secret** (not Text) for the three marked Secret.
 
-1. Create a free account at https://dash.cloudflare.com/sign-up.
-2. Install Node.js (LTS) from https://nodejs.org.
-3. Open a terminal (Windows: "Command Prompt"; Mac: "Terminal") and go into the `worker` folder of this project:
-   `cd path/to/seatwise/worker`
-4. Log in: `npx wrangler login` (a browser window opens; click Allow).
-5. Create the storage: `npx wrangler kv namespace create SEATWISE`
-   It prints an `id = "..."`. Open `worker/wrangler.toml` in Notepad and replace `REPLACE-WITH-KV-NAMESPACE-ID` with that id.
-6. In the same file, replace `https://REPLACE-WITH-YOUR-GITHUB-USERNAME.github.io` with your site's origin, for example `https://rahul.github.io` (only the part up to `.github.io`, no `/seatwise`, no trailing slash).
-7. Store the secrets (each command asks you to paste the value, then press Enter):
-   - `npx wrangler secret put RAZORPAY_KEY_SECRET` → paste your Razorpay **Key Secret**
-   - `npx wrangler secret put SESSION_SECRET` → paste any long random text (40+ characters, e.g. mash the keyboard). Keep it private.
-8. Deploy: `npx wrangler deploy`
-   It prints your Worker address, like `https://seatwise-api.yourname.workers.dev`. **Copy it.**
-9. Test it: open that address in a browser. You should see `{"ok":true,"service":"seatwise-api"}`.
+## Step 5 – Razorpay webhook
+Razorpay Dashboard → Account & Settings → **Webhooks → Add New Webhook** (make sure you are in **Live** mode)
+- Webhook URL: `https://seatwise-u4d.pages.dev/api/webhook`
+- Secret: the same text as `RAZORPAY_WEBHOOK_SECRET`
+- Active events: tick **payment.captured** and **order.paid**
+Save.
 
-### Optional (recommended): payment safety net
+## Step 6 – Redeploy
+Cloudflare Pages project → **Deployments** → latest → **Retry deployment** (settings only apply to new deployments).
 
-If a buyer pays but closes the tab before the website confirms, this webhook still gives them Premium.
+## Step 7 – Check it
+1. Open `https://seatwise-u4d.pages.dev/api/` – you must see `"configured":true`. If it lists names under `missing`, add those settings and redo Step 6.
+2. Real test (one time): open the site → click a locked row → Google sign-in → username → the Razorpay window opens automatically → pay ₹10 → the green ✓ appears. Sign out, sign in again: ✓ is back, no payment asked. Refund yourself from the Razorpay dashboard if you want the ₹10 back.
 
-1. Razorpay Dashboard → Account & Settings → Webhooks → Add New Webhook.
-2. URL: `https://YOUR-WORKER-ADDRESS/webhook`. Choose any secret text. Tick events **payment.captured** and **order.paid**.
-3. Run `npx wrangler secret put RAZORPAY_WEBHOOK_SECRET` and paste the same secret text.
+## Recommended extra protection (2 minutes, free)
+Cloudflare dashboard → your domain/Pages → **Security → WAF → Rate limiting rules → Create**: if URI Path starts with `/api/`, limit 30 requests per 1 minute per IP, action Block. (The code has its own limits too, but this one covers all visitors together.)
 
----
+## Daily data updates
+Unchanged: replace `all.csv` in GitHub.
 
-## Step 2 – Google sign-in
-
-1. https://console.cloud.google.com → your project → APIs & Services → Credentials → open your existing **OAuth 2.0 Client ID** (the one ending `...apps.googleusercontent.com`).
-2. Under **Authorized JavaScript origins** click Add URI and enter your site origin, e.g. `https://rahul.github.io` (same value as in Step 1.6). Save.
-3. No redirect URI and no client secret are needed. (The old Supabase callback URL is not used.)
-4. OAuth consent screen: set it to **In production** if you want everyone (not just test users) to sign in.
-
-Changes can take a few minutes to start working.
-
-## Step 3 – Website (GitHub Pages)
-
-1. Open `config.js` in Notepad, find the line `API_BASE: '',` and put your Worker address between the quotes, e.g. `API_BASE: 'https://seatwise-api.yourname.workers.dev',`. Save. This is the only file you edit for Premium. (Or send me the address and I will do it.)
-2. On GitHub, create a repository (or use your existing one) and upload **`index.html`**, **`config.js`** and **`all.csv`** to the top level (not inside a folder). The `worker`, `tests` and `.md` files are optional for the website; keeping them there is harmless (they contain no secrets).
-3. Repository → Settings → Pages → Source: "Deploy from a branch" → Branch `main`, folder `/ (root)` → Save.
-4. After a minute or two your site is live at `https://USERNAME.github.io/REPOSITORY/`.
-
-## Updating the data every day
-
-Replace `all.csv` in the GitHub repository (Add file → Upload files → same name → Commit). Nothing else.
-GitHub Pages republishes in roughly 1–2 minutes; after that every visitor gets the new file automatically (the page asks for a fresh copy on every load). The Course, State, Bond Years and Bond Penalty dropdowns rebuild themselves from the new file. The CSV must keep the same nine column headings.
-
----
-
-## Settings reference
-
-| Name | Where to set it | Secret? | Value |
-|---|---|---|---|
-| `GOOGLE_CLIENT_ID` | `worker/wrangler.toml` (already filled) and `config.js` (already filled) | No (public) | your `...apps.googleusercontent.com` ID |
-| `RAZORPAY_KEY_ID` | `worker/wrangler.toml` | No (public) | `rzp_live_...` |
-| `ALLOWED_ORIGIN` | `worker/wrangler.toml` | No | `https://USERNAME.github.io` |
-| KV namespace `SEATWISE` | `worker/wrangler.toml` | No | id from Step 1.5 |
-| `RAZORPAY_KEY_SECRET` | `npx wrangler secret put` | **Yes** | Razorpay Key Secret |
-| `SESSION_SECRET` | `npx wrangler secret put` | **Yes** | long random text |
-| `RAZORPAY_WEBHOOK_SECRET` | `npx wrangler secret put` (optional) | **Yes** | same text as in Razorpay webhook |
-| `API_BASE` | `config.js` | No | your Worker address |
-
-Never put a secret in `index.html`, `wrangler.toml` or GitHub.
-
-## First live test
-
-Razorpay live payments need your Razorpay account to be fully activated (KYC done). Sign in, choose a username, click **Buy Premium – ₹10**, pay ₹10, and the ✓ should appear next to your username. Sign out and sign in again with the same Google account; the ✓ returns. If you need your ₹10 back, refund it from the Razorpay dashboard.
-
-## Troubleshooting
-
-Open your Worker address in a browser: it shows `configured: true`, or lists the settings still missing (names only). The Premium page also shows these messages. `ALLOWED_ORIGIN` must exactly match your site origin (several can be comma-separated).
+## Where is the data?
+D1 database `seatwise-db`: tables `users` (premium yes/no), `orders`, `payments` (payment IDs), `audit` (events, no secrets). View them in the D1 Console, e.g. `SELECT * FROM audit ORDER BY id DESC LIMIT 20;`. If the audit shows `extra_payment_needs_refund`, someone paid twice; refund that payment in Razorpay.
