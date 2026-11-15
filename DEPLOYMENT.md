@@ -58,3 +58,9 @@ Unchanged: replace `all.csv` in GitHub.
 
 ## Where is the data?
 D1 database `seatwise-db`: tables `users` (premium yes/no), `orders`, `payments` (payment IDs), `audit` (events, no secrets). View them in the D1 Console, e.g. `SELECT * FROM audit ORDER BY id DESC LIMIT 20;`. If the audit shows `extra_payment_needs_refund`, someone paid twice; refund that payment in Razorpay.
+
+## Google sign-in not working? Check in this order
+1. **Cause #1 (most likely right after upgrading):** the new version signs you in through the server part, so Steps 2–6 above must be finished. Open the Premium page: a red message such as "Premium server is missing settings: ..." or "Sign-in failed: ..." tells you what is missing. Also open `https://seatwise-u4d.pages.dev/api/` – it must show `"configured":true`.
+2. `GOOGLE_CLIENT_ID` in Cloudflare must be EXACTLY the same as in `config.js`: `437007721003-i8csj3qirbjbgp7d0kjfiso3mevi70q2.apps.googleusercontent.com` (the old README mentions a different ID; ignore it).
+3. Google Cloud Console → APIs & Services → Credentials → that OAuth client → **Authorized JavaScript origins** must contain `https://seatwise-u4d.pages.dev` (no trailing slash, no path). OAuth consent screen should be **In production**. Changes can take up to a few hours to apply.
+4. **Quick rollback** to the old client-side-only sign-in while you finish setup: upload `config-rollback/config.js` (from the ZIP) over `config.js` in GitHub. Sign-in works again; buying Premium stays off until you put the normal `config.js` back.
