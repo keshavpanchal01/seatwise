@@ -340,10 +340,10 @@ footer a:hover{color:var(--fg)}
 
   var CSV_URL = './all.csv';
   var PER = 50;
-  var COLS = ['Course','State','Institute','Stipend Year 1','Stipend Year 2','Stipend Year 3','Bond Years','Bond Penalty','BED'];
-  var NUMERIC = {3:1,4:1,5:1,6:1,7:1,8:1};
+  var COLS = ['Course','State','Institute','Stipend','Bond Years','Bond Penalty','Beds'];
+  var NUMERIC = {3:1,4:1,5:1,6:1};
   // first-click direction per column; every column can be reversed with a second click
-  var FIRST_DIR = {3:'desc',4:'desc',5:'desc',6:'asc',7:'asc',8:'desc'};
+  var FIRST_DIR = {3:'desc',4:'asc',5:'asc',6:'desc'};
 
   function $(id){ return document.getElementById(id); }
 
@@ -423,12 +423,12 @@ footer a:hover{color:var(--fg)}
     fillSelect('course', types.map(function(t){ return [t, t]; }), 'All types');
     var states = uniq(DATA.map(function(r){ return r.raw[1]; })).sort();
     fillSelect('state', states.map(function(s){ return [s, s]; }), 'All states');
-    var by = uniq(DATA.filter(function(r){ return r.num[6] != null; }).map(function(r){ return String(r.num[6]); })).sort(function(a, b){ return a - b; });
+    var by = uniq(DATA.filter(function(r){ return r.num[4] != null; }).map(function(r){ return String(r.num[4]); })).sort(function(a, b){ return a - b; });
     fillSelect('bondy', by.map(function(v){ return [v, v]; }), 'All');
     var seen = {}, pen = [];
-    DATA.forEach(function(r){ if (r.raw[7] !== '' && !seen[r.raw[7]]){ seen[r.raw[7]] = 1; pen.push(r); } });
-    pen.sort(function(a, b){ return (toNum(a.raw[7]) || 0) - (toNum(b.raw[7]) || 0); });
-    fillSelect('bondp', pen.map(function(r){ return [r.raw[7], r.raw[7]]; }), 'All');
+    DATA.forEach(function(r){ if (r.raw[5] !== '' && !seen[r.raw[5]]){ seen[r.raw[5]] = 1; pen.push(r); } });
+    pen.sort(function(a, b){ return (toNum(a.raw[5]) || 0) - (toNum(b.raw[5]) || 0); });
+    fillSelect('bondp', pen.map(function(r){ return [r.raw[5], r.raw[5]]; }), 'All');
     $('st-i').textContent = DATA.length.toLocaleString('en-IN');
     $('st-s').textContent = states.length;
     $('st-t').textContent = types.length;
@@ -439,17 +439,17 @@ footer a:hover{color:var(--fg)}
     var qn = norm($('q').value);
     var toks = qn.split(' ').filter(Boolean);
     var qc = qn.replace(/ /g, '');
-    var yr = Number($('year').value);
+    var yr = 3;
     var sv = $('stip').value === '' ? null : Number($('stip').value);
     var bv = $('bed').value === '' ? null : Number($('bed').value);
     var fc = $('course').value, fs = $('state').value, fy = $('bondy').value, fp = $('bondp').value;
     var out = DATA.filter(function(r){
       if (sv != null && !(r.num[yr] != null && r.num[yr] > sv)) return false;
-      if (bv != null && !(r.num[8] != null && r.num[8] > bv)) return false;
+      if (bv != null && !(r.num[6] != null && r.num[6] > bv)) return false;
       if (fc !== '' && r.type !== fc) return false;
       if (fs !== '' && r.raw[1] !== fs) return false;
-      if (fy !== '' && r.num[6] !== Number(fy)) return false;
-      if (fp !== '' && r.raw[7] !== fp) return false;
+      if (fy !== '' && r.num[4] !== Number(fy)) return false;
+      if (fp !== '' && r.raw[5] !== fp) return false;
       if (toks.length){
         // substring match anywhere (each word, any order) or the whole query ignoring spaces/punctuation
         var all = true;
